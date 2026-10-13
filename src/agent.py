@@ -3,7 +3,7 @@ import json
 import ollama
 
 from llm_client import SYSTEM_PROMPT
-from ticket_tools import get_ticket_status
+from ticket_tools import create_ticket, get_ticket_status
 
 
 MODEL = "qwen3:4b"
@@ -31,6 +31,35 @@ TOOLS = [
                 "required": ["ticket_id"],
             },
         },
+    },
+        {
+        "type": "function",
+        "function": {
+            "name": "create_ticket",
+            "description": (
+                "Create a new fictional helpdesk ticket when the user "
+                "asks to report an IT problem or create a ticket. "
+                "Use the user's issue as the ticket title. "
+                "Use the requested priority if provided; otherwise "
+                "use Medium. Never claim a ticket was created unless "
+                "the tool confirms success."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "A short description of the IT issue",
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": ["Low", "Medium", "High"],
+                        "description": "Ticket priority; defaults to Medium",
+                    },
+                },
+                "required": ["title"],
+            },
+        },
     }
 ]
 
@@ -38,21 +67,23 @@ TOOLS = [
 # Only functions explicitly registered here can be executed.
 AVAILABLE_FUNCTIONS = {
     "get_ticket_status": get_ticket_status,
+    "create_ticket": create_ticket,
 }
 
 
-def run_agent(user_message: str) -> str:
-    """Run the helpdesk agent and handle any requested tool calls."""
+def run_agent(
+    user_message: str,
+    conversation_history: list | None = None,
+) -> str:
+    """Run the agent while preserving conversation history."""
+
+    if conversation_history is None:
+        conversation_history = []
 
     messages = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT,
-        },
-        {
-            "role": "user",
-            "content": user_message,
-        },
+        {"role": "system", "content": SYSTEM_PROMPT},
+        *conversation_history,
+        {"role": "user", "content": user_message},
     ]
 
     for _ in range(MAX_TOOL_ROUNDS):
@@ -69,6 +100,7 @@ def run_agent(user_message: str) -> str:
 
         # If the model doesn't request a tool, its response is final.
         if not tool_calls:
+            conversation_history[:] = messages[1:]
             return response.message.content.strip()
 
         for tool_call in tool_calls:
@@ -112,6 +144,8 @@ if __name__ == "__main__":
     print("AI Helpdesk Agent")
     print("-" * 40)
 
+    conversation_history = []
+
     while True:
         question = input("\nYou: ").strip()
 
@@ -123,7 +157,7 @@ if __name__ == "__main__":
             continue
 
         try:
-            answer = run_agent(question)
+            answer = run_agent(question, conversation_history)
             print(f"\nAssistant: {answer}")
         except Exception as error:
             print(
