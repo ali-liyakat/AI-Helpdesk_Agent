@@ -226,3 +226,42 @@ def test_agent_handles_unknown_tool(monkeypatch):
     result = agent.run_agent("Use an unknown tool.")
 
     assert result == "I couldn't use that tool."
+
+
+def test_agent_handles_invalid_tool_arguments(monkeypatch):
+    # The model provides an unexpected argument.
+    tool_call = make_tool_call(
+        "create_ticket",
+        {"unexpected_argument": "value"},
+    )
+    responses = [
+        make_response("", [tool_call]),
+        make_response("I couldn't create the ticket because the arguments were invalid."),
+    ]
+
+    def fake_chat(**kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setattr(agent.ollama, "chat", fake_chat)
+
+    result = agent.run_agent("Create a ticket.")
+
+    assert "couldn't create the ticket" in result.lower()
+
+
+def test_agent_reports_ticket_creation_failure(monkeypatch):
+    # Force the actual tool to reject an empty title.
+    tool_call = make_tool_call("create_ticket", {"title": "   "})
+    responses = [
+        make_response("", [tool_call]),
+        make_response("The ticket could not be created because the title was empty."),
+    ]
+
+    def fake_chat(**kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setattr(agent.ollama, "chat", fake_chat)
+
+    result = agent.run_agent("Create a ticket with an empty title.")
+
+    assert "could not be created" in result.lower()
