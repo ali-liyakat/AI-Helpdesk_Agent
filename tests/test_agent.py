@@ -132,3 +132,48 @@ def test_agent_stops_at_tool_round_limit(monkeypatch):
     result = agent.run_agent("Check ticket HD-1001.")
 
     assert "allowed number of tool rounds" in result
+
+
+
+def test_conversation_history_is_preserved_between_requests(monkeypatch):
+    responses = [
+        make_response("Ticket HD-1004 created."),
+        make_response("Ticket HD-1004 is Open."),
+    ]
+    chat_calls = []
+
+    def fake_chat(**kwargs):
+        chat_calls.append(kwargs)
+        return responses.pop(0)
+
+    monkeypatch.setattr(agent.ollama, "chat", fake_chat)
+
+    conversation_history = []
+
+    first_answer = agent.run_agent(
+        "Create a ticket for my email issue.",
+        conversation_history,
+    )
+
+    second_answer = agent.run_agent(
+        "What is the status of the ticket you just created?",
+        conversation_history,
+    )
+
+    assert first_answer == "Ticket HD-1004 created."
+    assert second_answer == "Ticket HD-1004 is Open."
+
+    # The second request should include the first request.
+    second_messages = chat_calls[1]["messages"]
+
+    assert any(
+        isinstance(message, dict)
+        and message.get("content") == "Create a ticket for my email issue."
+        for message in second_messages
+    )
+
+    # The previous assistant response should also be available.
+    assert any(
+        getattr(message, "content", None) == "Ticket HD-1004 created."
+        for message in second_messages
+    )
