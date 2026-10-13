@@ -40,6 +40,51 @@ def get_ticket_status(ticket_id: str) -> dict:
     }
 
 
+
+def create_ticket(title: str, priority: str = "Medium") -> dict:
+    """Create a fictional helpdesk ticket in memory."""
+
+    # Validate the ticket title.
+    title = title.strip()
+
+    if not title:
+        return {
+            "success": False,
+            "error": "Ticket title cannot be empty.",
+        }
+
+    # Validate priority.
+    priority = priority.strip().capitalize()
+
+    if priority not in {"Low", "Medium", "High"}:
+        return {
+            "success": False,
+            "error": "Priority must be Low, Medium, or High.",
+        }
+
+    # Generate the next ticket ID.
+    ticket_number = max(
+        int(ticket_id.split("-")[1])
+        for ticket_id in TICKETS
+    ) + 1
+
+    ticket_id = f"HD-{ticket_number}"
+
+    # Save the new ticket.
+    TICKETS[ticket_id] = {
+        "title": title,
+        "status": "Open",
+        "priority": priority,
+        "assigned_to": "Unassigned",
+    }
+
+    return {
+        "success": True,
+        "ticket_id": ticket_id,
+        **TICKETS[ticket_id],
+    }
+
+
 if __name__ == "__main__":
     result = get_ticket_status("HD-1001")
     print(result)
