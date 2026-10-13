@@ -3,8 +3,7 @@ import json
 import ollama
 
 from llm_client import SYSTEM_PROMPT
-from ticket_tools import create_ticket, get_ticket_status
-
+from ticket_tools import create_ticket, get_ticket_status, list_tickets
 
 MODEL = "qwen3:4b"
 MAX_TOOL_ROUNDS = 5
@@ -60,7 +59,35 @@ TOOLS = [
                 "required": ["title"],
             },
         },
-    }
+    },
+    
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tickets",
+            "description": (
+                "List fictional helpdesk tickets. Use this when the "
+                "user asks to see, list, or find multiple tickets. "
+                "If the user asks for tickets with a particular status, "
+                "pass that status. Otherwise, list all tickets."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["Open", "In Progress", "Resolved"],
+                        "description": (
+                            "Optional status filter. Omit it to list "
+                            "all tickets."
+                        ),
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+
 ]
 
 
@@ -68,6 +95,7 @@ TOOLS = [
 AVAILABLE_FUNCTIONS = {
     "get_ticket_status": get_ticket_status,
     "create_ticket": create_ticket,
+    "list_tickets": list_tickets,
 }
 
 
