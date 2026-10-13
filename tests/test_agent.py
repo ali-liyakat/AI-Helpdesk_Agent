@@ -177,3 +177,52 @@ def test_conversation_history_is_preserved_between_requests(monkeypatch):
         getattr(message, "content", None) == "Ticket HD-1004 created."
         for message in second_messages
     )
+
+
+def test_agent_calls_list_tickets(monkeypatch):
+    tool_call = make_tool_call("list_tickets", {})
+    responses = [
+        make_response("", [tool_call]),
+        make_response("There are 3 tickets."),
+    ]
+    chat_calls = []
+
+    def fake_chat(**kwargs):
+        chat_calls.append(kwargs)
+        return responses.pop(0)
+
+    monkeypatch.setattr(agent.ollama, "chat", fake_chat)
+
+    result = agent.run_agent("Show me all helpdesk tickets.")
+
+    assert result == "There are 3 tickets."
+    assert len(chat_calls) == 2
+
+    # Confirm the tool result was passed back to the model.
+    tool_messages = [
+        message
+        for message in chat_calls[1]["messages"]
+        if isinstance(message, dict)
+        and message.get("role") == "tool"
+        and message.get("name") == "list_tickets"
+    ]
+
+    assert len(tool_messages) == 1
+    assert '"success": true' in tool_messages[0]["content"]
+
+
+def test_agent_handles_unknown_tool(monkeypatch):
+    tool_call = make_tool_call("unknown_tool", {})
+    responses = [
+        make_response("", [tool_call]),
+        make_response("I couldn't use that tool."),
+    ]
+
+    def fake_chat(**kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setattr(agent.ollama, "chat", fake_chat)
+
+    result = agent.run_agent("Use an unknown tool.")
+
+    assert result == "I couldn't use that tool."
