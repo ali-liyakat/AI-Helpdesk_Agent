@@ -85,6 +85,38 @@ def create_ticket(title: str, priority: str = "Medium") -> dict:
     }
 
 
+def list_tickets(status: str | None = None) -> dict:
+    """List fictional helpdesk tickets, optionally filtered by status."""
+
+    valid_statuses = {"Open", "In Progress", "Resolved"}
+
+    if status is not None:
+        status = status.strip().title()
+
+        if status not in valid_statuses:
+            return {
+                "success": False,
+                "error": (
+                    "Status must be Open, In Progress, or Resolved."
+                ),
+            }
+
+    tickets = []
+
+    for ticket_id, ticket in TICKETS.items():
+        if status is None or ticket["status"] == status:
+            tickets.append({
+                "ticket_id": ticket_id,
+                **ticket,
+            })
+
+    return {
+        "success": True,
+        "count": len(tickets),
+        "tickets": tickets,
+    }
+
+
 if __name__ == "__main__":
     result = get_ticket_status("HD-1001")
     print(result)
