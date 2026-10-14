@@ -151,16 +151,36 @@ def run_agent(
                         "error": "The tool received invalid arguments.",
                     }
 
+            
             print(f"[Tool called: {function_name}]")
 
-            # Send the real Python result back to the model.
-            messages.append(
-                {
-                    "role": "tool",
-                    "name": function_name,
-                    "content": json.dumps(result),
-                }
-            )
+            # Preserve the actual result for the model.
+            messages.append({
+                "role": "tool",
+                "name": function_name,
+                "content": json.dumps(result),
+            })
+
+            # Do not let the model claim an action succeeded
+            # when the tool explicitly reports failure.
+            if (
+                isinstance(result, dict)
+                and result.get("success") is False
+            ):
+                error_message = result.get(
+                    "error",
+                    "The requested operation failed.",
+                )
+
+                if function_name == "create_ticket":
+                    return f"I couldn't create the ticket: {error_message}"
+
+                if function_name == "get_ticket_status":
+                    return f"I couldn't retrieve the ticket: {error_message}"
+
+                if function_name == "list_tickets":
+                    return f"I couldn't list the tickets: {error_message}"
+
 
     return (
         "I couldn't complete the request within the allowed "

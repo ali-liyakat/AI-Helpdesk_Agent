@@ -264,4 +264,21 @@ def test_agent_reports_ticket_creation_failure(monkeypatch):
 
     result = agent.run_agent("Create a ticket with an empty title.")
 
-    assert "could not be created" in result.lower()
+    assert "couldn't create the ticket" in result.lower()
+
+
+def test_agent_does_not_claim_ticket_created_after_tool_failure(monkeypatch):
+    tool_call = make_tool_call(
+        "create_ticket",
+        {"title": "   "},
+    )
+
+    def fake_chat(**kwargs):
+        return make_response("", [tool_call])
+
+    monkeypatch.setattr(agent.ollama, "chat", fake_chat)
+
+    result = agent.run_agent("Create a ticket.")
+
+    assert "couldn't create the ticket" in result.lower()
+    assert "successfully created" not in result.lower()
