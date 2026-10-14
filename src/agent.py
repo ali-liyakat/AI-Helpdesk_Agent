@@ -221,6 +221,8 @@ def run_agent(
 
                 if function_name == "list_tickets":
                     return f"I couldn't list the tickets: {error_message}"
+                if function_name == "update_ticket":
+                    return f"I couldn't update the ticket: {error_message}"
 
 
     return (

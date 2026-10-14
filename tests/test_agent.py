@@ -282,3 +282,60 @@ def test_agent_does_not_claim_ticket_created_after_tool_failure(monkeypatch):
 
     assert "couldn't create the ticket" in result.lower()
     assert "successfully created" not in result.lower()
+
+
+def test_agent_calls_update_ticket(monkeypatch):
+    tool_call = make_tool_call(
+        "update_ticket",
+        {"ticket_id": "HD-1002", "priority": "High"},
+    )
+    responses = [
+        make_response("", [tool_call]),
+        make_response("Ticket HD-1002 priority is now High."),
+    ]
+    chat_calls = []
+
+    def fake_chat(**kwargs):
+        chat_calls.append(kwargs)
+        return responses.pop(0)
+
+    monkeypatch.setattr(agent.ollama, "chat", fake_chat)
+
+    result = agent.run_agent(
+        "Change ticket HD-1002 priority to High."
+    )
+
+    assert "priority is now High" in result
+    assert len(chat_calls) == 2
+
+    tool_messages = [
+        message
+        for message in chat_calls[1]["messages"]
+        if isinstance(message, dict)
+        and message.get("role") == "tool"
+        and message.get("name") == "update_ticket"
+    ]
+
+    assert len(tool_messages) == 1
+    assert '"success": true' in tool_messages[0]["content"]
+
+
+
+def test_agent_returns_error_when_ticket_update_fails(monkeypatch):
+    tool_call = make_tool_call(
+        "update_ticket",
+        {"ticket_id": "HD-9999", "status": "Resolved"},
+    )
+
+    def fake_chat(**kwargs):
+        return make_response("", [tool_call])
+
+    monkeypatch.setattr(agent.ollama, "chat", fake_chat)
+
+    result = agent.run_agent(
+        "Mark ticket HD-9999 as Resolved."
+    )
+
+    assert "couldn't update the ticket" in result.lower()
+    assert "was not found" in result.lower()
+
