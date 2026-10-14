@@ -3,7 +3,12 @@ import json
 import ollama
 
 from llm_client import SYSTEM_PROMPT
-from ticket_tools import create_ticket, get_ticket_status, list_tickets
+from ticket_tools import (
+    create_ticket,
+    get_ticket_status,
+    list_tickets,
+    update_ticket,
+)
 
 MODEL = "qwen3:4b"
 MAX_TOOL_ROUNDS = 5
@@ -87,6 +92,41 @@ TOOLS = [
             },
         },
     },
+    
+    {
+        "type": "function",
+        "function": {
+            "name": "update_ticket",
+            "description": (
+                "Update the status or priority of an existing helpdesk "
+                "ticket when the user explicitly requests a change. "
+                "Use the ticket ID provided by the user or established "
+                "in the conversation. Only report changes confirmed "
+                "by the tool result."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "string",
+                        "description": "Ticket ID, such as HD-1001",
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["Open", "In Progress", "Resolved"],
+                        "description": "New ticket status, if requested",
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": ["Low", "Medium", "High"],
+                        "description": "New ticket priority, if requested",
+                    },
+                },
+                "required": ["ticket_id"],
+            },
+        },
+    },
+
 
 ]
 
@@ -96,6 +136,7 @@ AVAILABLE_FUNCTIONS = {
     "get_ticket_status": get_ticket_status,
     "create_ticket": create_ticket,
     "list_tickets": list_tickets,
+    "update_ticket": update_ticket,
 }
 
 
