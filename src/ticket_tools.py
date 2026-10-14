@@ -117,6 +117,60 @@ def list_tickets(status: str | None = None) -> dict:
     }
 
 
+def update_ticket(
+    ticket_id: str,
+    status: str | None = None,
+    priority: str | None = None,
+) -> dict:
+    """Update the status or priority of a fictional helpdesk ticket."""
+
+    ticket_id = ticket_id.strip().upper()
+    ticket = TICKETS.get(ticket_id)
+
+    if ticket is None:
+        return {
+            "success": False,
+            "error": f"Ticket {ticket_id} was not found.",
+        }
+
+    if status is None and priority is None:
+        return {
+            "success": False,
+            "error": "Provide a status or priority to update.",
+        }
+
+    valid_statuses = {"Open", "In Progress", "Resolved"}
+    valid_priorities = {"Low", "Medium", "High"}
+
+    if status is not None:
+        status = status.strip().title()
+        if status not in valid_statuses:
+            return {
+                "success": False,
+                "error": "Status must be Open, In Progress, or Resolved.",
+            }
+
+    if priority is not None:
+        priority = priority.strip().capitalize()
+        if priority not in valid_priorities:
+            return {
+                "success": False,
+                "error": "Priority must be Low, Medium, or High.",
+            }
+
+    if status is not None:
+        ticket["status"] = status
+
+    if priority is not None:
+        ticket["priority"] = priority
+
+    return {
+        "success": True,
+        "ticket_id": ticket_id,
+        **ticket,
+    }
+
+
 if __name__ == "__main__":
     result = get_ticket_status("HD-1001")
     print(result)
