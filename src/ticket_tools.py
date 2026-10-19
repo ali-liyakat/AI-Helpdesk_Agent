@@ -1,33 +1,34 @@
 
-# Fictional helpdesk tickets for development and testing.
-TICKETS = {
-    "HD-1001": {
-        "title": "Unable to connect to office Wi-Fi",
-        "status": "In Progress",
-        "priority": "High",
-        "assigned_to": "Alex Morgan",
-    },
-    "HD-1002": {
-        "title": "Request access to the reporting dashboard",
-        "status": "Open",
-        "priority": "Medium",
-        "assigned_to": "Jamie Lee",
-    },
-    "HD-1003": {
-        "title": "Laptop running slowly",
-        "status": "Resolved",
-        "priority": "Low",
-        "assigned_to": "Taylor Chen",
-    },
-}
+"""SQLite-backed tools for the fictional helpdesk."""
+
+from database import (
+    DATABASE_PATH,
+    get_connection,
+    initialize_database,
+    seed_initial_tickets,
+)
+
+# Ensure a fresh checkout can initialize its database automatically.
+initialize_database()
+seed_initial_tickets()
 
 
 def get_ticket_status(ticket_id: str) -> dict:
-    """Return details for a fictional helpdesk ticket."""
+    """Return details for a helpdesk ticket."""
 
-    ticket = TICKETS.get(ticket_id.upper())
+    ticket_id = ticket_id.strip().upper()
 
-    if ticket is None:
+    with get_connection(DATABASE_PATH) as connection:
+        row = connection.execute(
+            """
+            SELECT ticket_id, title, status, priority, assigned_to
+            FROM tickets
+            WHERE ticket_id = ?
+            """,
+            (ticket_id,),
+        ).fetchone()
+
+    if row is None:
         return {
             "success": False,
             "error": f"Ticket {ticket_id} was not found.",
@@ -35,16 +36,13 @@ def get_ticket_status(ticket_id: str) -> dict:
 
     return {
         "success": True,
-        "ticket_id": ticket_id.upper(),
-        **ticket,
+        **dict(row),
     }
 
 
-
 def create_ticket(title: str, priority: str = "Medium") -> dict:
-    """Create a fictional helpdesk ticket in memory."""
+    """Create and persist a helpdesk ticket."""
 
-    # Validate the ticket title.
     title = title.strip()
 
     if not title:
@@ -53,7 +51,6 @@ def create_ticket(title: str, priority: str = "Medium") -> dict:
             "error": "Ticket title cannot be empty.",
         }
 
-    # Validate priority.
     priority = priority.strip().capitalize()
 
     if priority not in {"Low", "Medium", "High"}:
@@ -62,31 +59,47 @@ def create_ticket(title: str, priority: str = "Medium") -> dict:
             "error": "Priority must be Low, Medium, or High.",
         }
 
-    # Generate the next ticket ID.
-    ticket_number = max(
-        int(ticket_id.split("-")[1])
-        for ticket_id in TICKETS
-    ) + 1
+    with get_connection(DATABASE_PATH) as connection:
+        # Lock the database for this transaction while generating an ID.
+        connection.execute("BEGIN IMMEDIATE")
 
-    ticket_id = f"HD-{ticket_number}"
+        row = connection.execute(
+            """
+            SELECT MAX(CAST(SUBSTR(ticket_id, 4) AS INTEGER))
+            FROM tickets
+            WHERE ticket_id GLOB 'HD-[0-9]*'
+            """
+        ).fetchone()
 
-    # Save the new ticket.
-    TICKETS[ticket_id] = {
-        "title": title,
-        "status": "Open",
-        "priority": priority,
-        "assigned_to": "Unassigned",
-    }
+        next_number = (row[0] or 1000) + 1
+        ticket_id = f"HD-{next_number}"
+
+        connection.execute(
+            """
+            INSERT INTO tickets
+                (ticket_id, title, status, priority, assigned_to)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (ticket_id, title, "Open", priority, "Unassigned"),
+        )
+
+        ticket = connection.execute(
+            """
+            SELECT ticket_id, title, status, priority, assigned_to
+            FROM tickets
+            WHERE ticket_id = ?
+            """,
+            (ticket_id,),
+        ).fetchone()
 
     return {
         "success": True,
-        "ticket_id": ticket_id,
-        **TICKETS[ticket_id],
+        **dict(ticket),
     }
 
 
 def list_tickets(status: str | None = None) -> dict:
-    """List fictional helpdesk tickets, optionally filtered by status."""
+    """List tickets, optionally filtering by status."""
 
     valid_statuses = {"Open", "In Progress", "Resolved"}
 
@@ -101,14 +114,22 @@ def list_tickets(status: str | None = None) -> dict:
                 ),
             }
 
-    tickets = []
+    query = """
+        SELECT ticket_id, title, status, priority, assigned_to
+        FROM tickets
+    """
+    parameters = ()
 
-    for ticket_id, ticket in TICKETS.items():
-        if status is None or ticket["status"] == status:
-            tickets.append({
-                "ticket_id": ticket_id,
-                **ticket,
-            })
+    if status is not None:
+        query += " WHERE status = ?"
+        parameters = (status,)
+
+    query += " ORDER BY CAST(SUBSTR(ticket_id, 4) AS INTEGER)"
+
+    with get_connection(DATABASE_PATH) as connection:
+        rows = connection.execute(query, parameters).fetchall()
+
+    tickets = [dict(row) for row in rows]
 
     return {
         "success": True,
@@ -122,16 +143,9 @@ def update_ticket(
     status: str | None = None,
     priority: str | None = None,
 ) -> dict:
-    """Update the status or priority of a fictional helpdesk ticket."""
+    """Update and persist a ticket's status or priority."""
 
     ticket_id = ticket_id.strip().upper()
-    ticket = TICKETS.get(ticket_id)
-
-    if ticket is None:
-        return {
-            "success": False,
-            "error": f"Ticket {ticket_id} was not found.",
-        }
 
     if status is None and priority is None:
         return {
@@ -144,6 +158,7 @@ def update_ticket(
 
     if status is not None:
         status = status.strip().title()
+
         if status not in valid_statuses:
             return {
                 "success": False,
@@ -152,25 +167,40 @@ def update_ticket(
 
     if priority is not None:
         priority = priority.strip().capitalize()
+
         if priority not in valid_priorities:
             return {
                 "success": False,
                 "error": "Priority must be Low, Medium, or High.",
             }
 
-    if status is not None:
-        ticket["status"] = status
+    with get_connection(DATABASE_PATH) as connection:
+        existing = connection.execute(
+            "SELECT 1 FROM tickets WHERE ticket_id = ?",
+            (ticket_id,),
+        ).fetchone()
 
-    if priority is not None:
-        ticket["priority"] = priority
+        if existing is None:
+            return {
+                "success": False,
+                "error": f"Ticket {ticket_id} was not found.",
+            }
 
-    return {
-        "success": True,
-        "ticket_id": ticket_id,
-        **ticket,
-    }
+        if status is not None:
+            connection.execute(
+                "UPDATE tickets SET status = ? WHERE ticket_id = ?",
+                (status, ticket_id),
+            )
+
+        if priority is not None:
+            connection.execute(
+                "UPDATE tickets SET priority = ? WHERE ticket_id = ?",
+                (priority, ticket_id),
+            )
+
+    return get_ticket_status(ticket_id)
 
 
 if __name__ == "__main__":
-    result = get_ticket_status("HD-1001")
-    print(result)
+    print(get_ticket_status("HD-1001"))
+    print(list_tickets())

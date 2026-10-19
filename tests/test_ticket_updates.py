@@ -8,31 +8,21 @@ SRC_DIRECTORY = PROJECT_ROOT / "src"
 if str(SRC_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SRC_DIRECTORY))
 
-from ticket_tools import TICKETS, update_ticket
+from ticket_tools import get_ticket_status, update_ticket
 
 
 def test_update_ticket_status():
-    original_status = TICKETS["HD-1001"]["status"]
+    result = update_ticket("HD-1001", status="Resolved")
 
-    try:
-        result = update_ticket("HD-1001", status="Resolved")
-
-        assert result["success"] is True
-        assert result["status"] == "Resolved"
-    finally:
-        TICKETS["HD-1001"]["status"] = original_status
+    assert result["success"] is True
+    assert result["status"] == "Resolved"
 
 
 def test_update_ticket_priority():
-    original_priority = TICKETS["HD-1001"]["priority"]
+    result = update_ticket("HD-1001", priority="Low")
 
-    try:
-        result = update_ticket("HD-1001", priority="Low")
-
-        assert result["success"] is True
-        assert result["priority"] == "Low"
-    finally:
-        TICKETS["HD-1001"]["priority"] = original_priority
+    assert result["success"] is True
+    assert result["priority"] == "Low"
 
 
 def test_update_ticket_rejects_unknown_ticket():
@@ -64,17 +54,21 @@ def test_update_ticket_requires_a_field():
 
 
 def test_update_ticket_can_change_both_fields():
-    original_ticket = TICKETS["HD-1001"].copy()
+    result = update_ticket(
+        "HD-1001",
+        status="Resolved",
+        priority="Low",
+    )
 
-    try:
-        result = update_ticket(
-            "HD-1001",
-            status="Resolved",
-            priority="Low",
-        )
+    assert result["success"] is True
+    assert result["status"] == "Resolved"
+    assert result["priority"] == "Low"
 
-        assert result["success"] is True
-        assert result["status"] == "Resolved"
-        assert result["priority"] == "Low"
-    finally:
-        TICKETS["HD-1001"] = original_ticket
+
+def test_updated_ticket_can_be_retrieved():
+    update_ticket("HD-1001", status="Resolved")
+
+    retrieved = get_ticket_status("HD-1001")
+
+    assert retrieved["success"] is True
+    assert retrieved["status"] == "Resolved"

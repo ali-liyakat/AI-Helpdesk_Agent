@@ -8,7 +8,7 @@ SRC_DIRECTORY = PROJECT_ROOT / "src"
 if str(SRC_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SRC_DIRECTORY))
 
-from ticket_tools import TICKETS, create_ticket, get_ticket_status
+from ticket_tools import create_ticket, get_ticket_status
 
 
 def test_create_ticket_successfully():
